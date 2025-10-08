@@ -1,1 +1,53 @@
+/*
+===============================================================================
+ Script:    init_etl_db.sql
+ Purpose:   Initialize an ETL database with Bronze/Silver/Gold schemas.
+ Author:    <your-name>
+ Notes:
+   - Checks if the database exists; creates it if missing.
+   - Then creates schemas (no existence checks by design).
+   - Separate batches (GO) for CREATE SCHEMA per SQL Server requirements.
+ Usage:
+   - Run in SSMS or sqlcmd.
+   - Edit DB name if needed (currently: Datawherhouse).
+===============================================================================
+*/
+
+-- Always manage database creation from master
+USE master;
+GO
+
+-- Create database only if it does not exist
+IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'Datawherhouse')
+BEGIN
+    PRINT 'Creating database [Datawherhouse]...';
+    CREATE DATABASE [Datawherhouse];
+END
+ELSE
+BEGIN
+    PRINT 'Database [Datawherhouse] already exists. Continuing...';
+END
+GO
+
+-- Switch context to the target database
+USE [Datawherhouse];
+GO
+
+-- Create schemas (no existence checks as requested)
+PRINT 'Creating schema [Bronze]...';
+GO
+CREATE SCHEMA [Bronze] ;
+GO
+
+PRINT 'Creating schema [Silver]...';
+GO
+CREATE SCHEMA [Silver] ;
+GO
+
+PRINT 'Creating schema [Gold]...';
+GO
+CREATE SCHEMA [Gold] ;
+GO
+
+PRINT 'Setup complete.';
 
