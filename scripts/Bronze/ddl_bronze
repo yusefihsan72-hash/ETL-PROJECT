@@ -1,1 +1,136 @@
+/* =========================================================
+   BRONZE LAYER - RAW LANDING TABLES (SCHEMA-ON-READ)
+   Purpose:
+     - Hold raw, minimally transformed data as ingested from sources
+     - Preserve source types/values for traceability and easy re-loads
+   Notes:
+     - Use NVARCHAR in raw "sales_details" to avoid load failures on dirty data
+     - Actual typing/cleansing happens later in SILVER/GOLD layers
+   ========================================================= */
+
+------------------------------------------------------------
+-- Bronze.cust_info
+-- Source: CRM (cust_info.csv)
+-- Grain: One row per customer
+-- Usage: Raw customer master; typed dates for common filters
+------------------------------------------------------------
+IF OBJECT_ID(N'[Bronze].[cust_info]', N'U') IS NOT NULL
+    DROP TABLE [Bronze].[cust_info];
+GO
+CREATE TABLE Bronze.cust_info (
+    cst_id             INT,             -- Natural key from source system (integer id)
+    cst_key            NVARCHAR(50),    -- Business/customer key (string id from CRM)
+    cst_firstname      NVARCHAR(100),   -- First name
+    cst_lastname       NVARCHAR(100),   -- Last name
+    cst_marital_status NVARCHAR(100),   -- Marital status (free text in source)
+    cst_gndr           NVARCHAR(50),    -- Gender (free text/code as provided)
+    cst_create_date    DATE             -- Customer creation date (already date-typed)
+);
+
+
+
+
+/* -------------------------
+   Bronze.prd_info
+   -------------------------
+   Source: CRM (prd_info.csv)
+   Grain: One row per product
+   Usage: Raw product master data; start/end dates as DATE for validity windows
+*/
+IF OBJECT_ID(N'[Bronze].[prd_info]', N'U') IS NOT NULL
+    DROP TABLE [Bronze].[prd_info];
+GO
+CREATE TABLE [Bronze].[prd_info] (
+    prd_id        INT            ,  -- Natural product id from source
+    prd_key       NVARCHAR(50)   ,  -- Business/product key (string)
+    prd_nm        NVARCHAR(100)  ,  -- Product name
+    prd_cost      DECIMAL(10,2)  ,  -- Unit cost (numeric typed)
+    prd_line      NVARCHAR(10)   ,  -- Product line/category code
+    prd_start_dt  DATE           ,  -- Start/valid-from date
+    prd_end_dt    DATE              -- End/valid-to date
+);
+
+
+
+
+/* -------------------------
+   Bronze.sales_details
+   -------------------------
+   Source: CRM (sales_details.csv)
+   Grain: One row per sales order line (as landed)
+   Important:
+     - All columns are NVARCHAR in BRONZE on purpose to avoid BULK INSERT failures
+       from dirty/invalid values (dates, numbers). Cast/validate later in SILVER.
+*/
+IF OBJECT_ID(N'[Bronze].[sales_details]', N'U') IS NOT NULL
+    DROP TABLE [Bronze].[sales_details];
+GO
+CREATE TABLE [Bronze].[sales_details] (
+    sls_ord_num  NVARCHAR(200) NULL, -- Sales order number
+    sls_prd_key  NVARCHAR(200) NULL, -- Product key (joins to product by business key)
+    sls_cust_id  NVARCHAR(200) NULL, -- Customer id (string-form; will be cast later)
+    sls_order_dt NVARCHAR(200) NULL, -- Order date (kept raw; parse to DATE in SILVER)
+    sls_ship_dt  NVARCHAR(200) NULL, -- Ship date (raw)
+    sls_due_dt   NVARCHAR(200) NULL, -- Due date (raw)
+    sls_sales    NVARCHAR(200) NULL, -- Sales amount (raw numeric text)
+    sls_quantity NVARCHAR(200) NULL, -- Quantity (raw numeric text)
+    sls_price    NVARCHAR(200) NULL  -- Unit price (raw numeric text)
+);
+
+
+
+
+/* -------------------------
+   Bronze.CUST_AZ12
+   -------------------------
+   Source: ERP (CUST_AZ12.csv)
+   Grain: One row per ERP customer record
+   Notes: Date typed for common downstream joins/filters
+*/
+IF OBJECT_ID(N'[Bronze].[CUST_AZ12]', N'U') IS NOT NULL
+    DROP TABLE [Bronze].[CUST_AZ12];
+GO
+CREATE TABLE [Bronze].[CUST_AZ12] (
+    [CID]   NVARCHAR(20)  ,  -- Customer id/code in ERP
+    [BDATE] DATE          ,  -- Birth date (date-typed)
+    [GEN]   NVARCHAR(10)     -- Gender code/text
+);
+
+
+
+
+/* -------------------------
+   Bronze.LOC_A101
+   -------------------------
+   Source: ERP (LOC_A101.csv)
+   Grain: One row per customer-location record
+   Notes: Country is free text from source
+*/
+IF OBJECT_ID(N'[Bronze].[LOC_A101]', N'U') IS NOT NULL
+    DROP TABLE [Bronze].[LOC_A101];
+GO
+CREATE TABLE [Bronze].[LOC_A101] (
+    [CID]   NVARCHAR(20)  ,  -- Customer id/code (joins to ERP customers)
+    [CNTRY] NVARCHAR(50)     -- Country as reported in ERP
+);
+
+
+
+
+/* -------------------------
+   Bronze.PX_CAT_G1V2
+   -------------------------
+   Source: ERP (PX_CAT_G1V2.csv)
+   Grain: One row per category/subcategory mapping
+   Notes: Maintenance is a short Y/N or code field from source
+*/
+IF OBJECT_ID(N'[Bronze].[PX_CAT_G1V2]', N'U') IS NOT NULL
+    DROP TABLE [Bronze].[PX_CAT_G1V2];
+GO
+CREATE TABLE [Bronze].[PX_CAT_G1V2] (
+    [ID]           NVARCHAR(20)   ,  -- Item id/code
+    [CAT]          NVARCHAR(50)   ,  -- Category
+    [SUBCAT]       NVARCHAR(100)  ,  -- Subcategory
+    [MAINTENANCE]  NVARCHAR(3)        -- Maintenance flag/code (e.g., 'Y'/'N')
+);
 
