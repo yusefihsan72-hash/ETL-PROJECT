@@ -1,0 +1,246 @@
+/* =========================================================
+   Procedure : Bronze.Load_Bronze
+   Layer     : BRONZE (raw landing)
+   Purpose   : Orchestrates BULK INSERT of all BRONZE tables
+               with banners, per-table timing, and overall timing.
+   Behavior  : - TRUNCATE each target table (idempotent reload)
+               - BULK INSERT from local CSV paths
+               - PRINT start/end times and durations
+               - TRY/CATCH with basic error diagnostics; rethrows
+   Prereqs   : - SQL Server service account/user must read the CSV paths
+               - Proper permissions (ADMINISTER BULK OPERATIONS or sysadmin)
+               - Target files exist with expected delimiters/header rows
+   Notes     : Do not embed GO inside the procedure body. Adjust file paths
+               if deploying to a different environment.
+   ========================================================= */
+
+CREATE PROCEDURE Bronze.Load_Bronze AS
+BEGIN
+    -- ===== Overall timing context =====
+    DECLARE @overall_start datetime2(3), @overall_end datetime2(3), @total_ms bigint, @total_time time(3);
+    SET @overall_start = SYSDATETIME();
+    PRINT '========== BRONZE LOAD: OVERALL START =========='
+    PRINT 'OVERALL START TIME: ' + CONVERT(varchar(33), @overall_start, 121);
+
+    BEGIN TRY
+        /* =========================================================
+           BRONZE LAYER BULK LOADS - RUN ORDERED AS WRITTEN
+           ========================================================= */
+
+        -- ============================
+        -- Section: Bronze.cust_info
+        -- Desc   : Customer master (CRM). Truncate + bulk load.
+        -- ============================
+        DECLARE @start_cust_info datetime2(3), @end_cust_info datetime2(3);
+
+        PRINT '========== START: Bronze.cust_info ==========';
+        SET @start_cust_info = SYSDATETIME();
+        PRINT 'START TIME [Bronze].[cust_info]: ' + CONVERT(varchar(33), @start_cust_info, 121);
+
+        IF OBJECT_ID(N'[Bronze].[cust_info]', N'U') IS NOT NULL
+            PRINT 'Truncating [Bronze].[cust_info]...';
+        TRUNCATE TABLE [Bronze].[cust_info];
+
+        PRINT 'Bulk inserting into [Bronze].[cust_info]...';
+        BULK INSERT [Bronze].[cust_info]
+        FROM 'C:\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\cust_info.csv'
+        WITH (
+            FIRSTROW        = 2,          -- skip header row
+            FIELDTERMINATOR = ',',        -- CSV delimiter
+            TABLOCK
+        );
+
+        SET @end_cust_info = SYSDATETIME();
+        PRINT 'END TIME [Bronze].[cust_info]: ' + CONVERT(varchar(33), @end_cust_info, 121);
+        PRINT 'DURATION [Bronze].[cust_info] (ms): ' + CAST(DATEDIFF(ms, @start_cust_info, @end_cust_info) AS varchar(20));
+        PRINT '========== DONE: Bronze.cust_info ==========';
+
+
+
+        /* ----- Bronze.prd_info ----- */
+        -- ============================
+        -- Section: Bronze.prd_info
+        -- Desc   : Product master (CRM). Truncate + bulk load.
+        -- ============================
+        DECLARE @start_prd_info datetime2(3), @end_prd_info datetime2(3);
+
+        PRINT '========== START: Bronze.prd_info ==========';
+        SET @start_prd_info = SYSDATETIME();
+        PRINT 'START TIME [Bronze].[prd_info]: ' + CONVERT(varchar(33), @start_prd_info, 121);
+
+        IF OBJECT_ID(N'[Bronze].[prd_info]', N'U') IS NOT NULL
+            PRINT 'Truncating [Bronze].[prd_info]...';
+        TRUNCATE TABLE [Bronze].[prd_info];
+
+        PRINT 'Bulk inserting into [Bronze].[prd_info]...';
+        BULK INSERT [Bronze].[prd_info]
+        FROM 'C:\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\prd_info.csv'
+        WITH (
+            FIRSTROW        = 2,          -- skip header row
+            FIELDTERMINATOR = ',',        -- CSV delimiter
+            TABLOCK
+        );
+
+        SET @end_prd_info = SYSDATETIME();
+        PRINT 'END TIME [Bronze].[prd_info]: ' + CONVERT(varchar(33), @end_prd_info, 121);
+        PRINT 'DURATION [Bronze].[prd_info] (ms): ' + CAST(DATEDIFF(ms, @start_prd_info, @end_prd_info) AS varchar(20));
+        PRINT '========== DONE: Bronze.prd_info ==========';
+
+
+
+        -- ============================
+        -- Section: Bronze.sales_details
+        -- Desc   : Sales order lines (CRM). Truncate + bulk load.
+        -- Note   : Columns are NVARCHAR in BRONZE to tolerate dirty data.
+        -- ============================
+        DECLARE @start_sales_details datetime2(3), @end_sales_details datetime2(3);
+
+        PRINT '========== START: Bronze.sales_details ==========';
+        SET @start_sales_details = SYSDATETIME();
+        PRINT 'START TIME [Bronze].[sales_details]: ' + CONVERT(varchar(33), @start_sales_details, 121);
+
+        IF OBJECT_ID(N'[Bronze].[sales_details]', N'U') IS NOT NULL
+            PRINT 'Truncating [Bronze].[sales_details]...';
+        TRUNCATE TABLE [Bronze].[sales_details];
+
+        PRINT 'Bulk inserting into [Bronze].[sales_details]...';
+        BULK INSERT [Bronze].[sales_details]
+        FROM 'C:\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\sales_details.csv'
+        WITH (
+            FIRSTROW        = 2,
+            FIELDTERMINATOR = ',',
+            TABLOCK
+        );
+
+        SET @end_sales_details = SYSDATETIME();
+        PRINT 'END TIME [Bronze].[sales_details]: ' + CONVERT(varchar(33), @end_sales_details, 121);
+        PRINT 'DURATION [Bronze].[sales_details] (ms): ' + CAST(DATEDIFF(ms, @start_sales_details, @end_sales_details) AS varchar(20));
+        PRINT '========== DONE: Bronze.sales_details ==========';
+
+
+
+        -- ============================
+        -- Section: Bronze.CUST_AZ12
+        -- Desc   : ERP customer attributes. Truncate + bulk load.
+        -- ============================
+        DECLARE @start_CUST_AZ12 datetime2(3), @end_CUST_AZ12 datetime2(3);
+
+        PRINT '========== START: Bronze.CUST_AZ12 ==========';
+        SET @start_CUST_AZ12 = SYSDATETIME();
+        PRINT 'START TIME [Bronze].[CUST_AZ12]: ' + CONVERT(varchar(33), @start_CUST_AZ12, 121);
+
+        IF OBJECT_ID(N'[Bronze].[CUST_AZ12]', N'U') IS NOT NULL
+            PRINT 'Truncating [Bronze].[CUST_AZ12]...';
+        TRUNCATE TABLE [Bronze].[CUST_AZ12];
+
+        PRINT 'Bulk inserting into [Bronze].[CUST_AZ12]...';
+        BULK INSERT [Bronze].[CUST_AZ12]
+        FROM 'C:\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\CUST_AZ12.csv'
+        WITH (
+            FIRSTROW        = 2,          -- header row present
+            FIELDTERMINATOR = ',',        -- CSV delimiter
+            TABLOCK
+            -- ,ERRORFILE   = 'C:\temp\CUST_AZ12_err'  -- optional: capture bad rows
+            -- ,MAXERRORS   = 1000                     -- optional: allow more row errors
+        );
+
+        SET @end_CUST_AZ12 = SYSDATETIME();
+        PRINT 'END TIME [Bronze].[CUST_AZ12]: ' + CONVERT(varchar(33), @end_CUST_AZ12, 121);
+        PRINT 'DURATION [Bronze].[CUST_AZ12] (ms): ' + CAST(DATEDIFF(ms, @start_CUST_AZ12, @end_CUST_AZ12) AS varchar(20));
+        PRINT '========== DONE: Bronze.CUST_AZ12 ==========';
+
+
+
+        -- ============================
+        -- Section: Bronze.LOC_A101
+        -- Desc   : ERP customer-country mapping. Truncate + bulk load.
+        -- ============================
+        DECLARE @start_LOC_A101 datetime2(3), @end_LOC_A101 datetime2(3);
+
+        PRINT '========== START: Bronze.LOC_A101 ==========';
+        SET @start_LOC_A101 = SYSDATETIME();
+        PRINT 'START TIME [Bronze].[LOC_A101]: ' + CONVERT(varchar(33), @start_LOC_A101, 121);
+
+        IF OBJECT_ID(N'[Bronze].[LOC_A101]', N'U') IS NOT NULL
+            PRINT 'Truncating [Bronze].[LOC_A101]...';
+        TRUNCATE TABLE [Bronze].[LOC_A101];
+
+        PRINT 'Bulk inserting into [Bronze].[LOC_A101]...';
+        BULK INSERT [Bronze].[LOC_A101]
+        FROM 'C:\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\LOC_A101.csv'
+        WITH (
+            FIRSTROW        = 2,          -- skip header
+            FIELDTERMINATOR = ',',        -- CSV delimiter
+            TABLOCK
+        );
+
+        SET @end_LOC_A101 = SYSDATETIME();
+        PRINT 'END TIME [Bronze].[LOC_A101]: ' + CONVERT(varchar(33), @end_LOC_A101, 121);
+        PRINT 'DURATION [Bronze].[LOC_A101] (ms): ' + CAST(DATEDIFF(ms, @start_LOC_A101, @end_LOC_A101) AS varchar(20));
+        PRINT '========== DONE: Bronze.LOC_A101 ==========';
+
+
+
+        -- ============================
+        -- Section: Bronze.PX_CAT_G1V2
+        -- Desc   : ERP category mapping. Truncate + bulk load.
+        -- ============================
+        DECLARE @start_PX_CAT_G1V2 datetime2(3), @end_PX_CAT_G1V2 datetime2(3);
+
+        PRINT '========== START: Bronze.PX_CAT_G1V2 ==========';
+        SET @start_PX_CAT_G1V2 = SYSDATETIME();
+        PRINT 'START TIME [Bronze].[PX_CAT_G1V2]: ' + CONVERT(varchar(33), @start_PX_CAT_G1V2, 121);
+
+        IF OBJECT_ID(N'[Bronze].[PX_CAT_G1V2]', N'U') IS NOT NULL
+            PRINT 'Truncating [Bronze].[PX_CAT_G1V2]...';
+        TRUNCATE TABLE [Bronze].[PX_CAT_G1V2];
+
+        PRINT 'Bulk inserting into [Bronze].[PX_CAT_G1V2]...';
+        BULK INSERT [Bronze].[PX_CAT_G1V2]
+        FROM 'C:\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\PX_CAT_G1V2.csv'
+        WITH (
+            FIRSTROW        = 2,          -- skip header
+            FIELDTERMINATOR = ',',        -- CSV delimiter
+            TABLOCK
+        );
+
+        SET @end_PX_CAT_G1V2 = SYSDATETIME();
+        PRINT 'END TIME [Bronze].[PX_CAT_G1V2]: ' + CONVERT(varchar(33), @end_PX_CAT_G1V2, 121);
+        PRINT 'DURATION [Bronze].[PX_CAT_G1V2] (ms): ' + CAST(DATEDIFF(ms, @start_PX_CAT_G1V2, @end_PX_CAT_G1V2) AS varchar(20));
+        PRINT '========== DONE: Bronze.PX_CAT_G1V2 ==========';
+
+
+
+        /* =========================================================
+           ALL BRONZE LOADS COMPLETED
+           ========================================================= */
+        SET @overall_end = SYSDATETIME();
+        SET @total_ms = DATEDIFF(ms, @overall_start, @overall_end);
+        SET @total_time = DATEADD(millisecond, @total_ms, CAST('00:00:00.000' AS time(3)));
+
+        PRINT '========== ALL BRONZE BULK LOADS COMPLETED ==========';
+
+        PRINT 'OVERALL END TIME:   ' + CONVERT(varchar(33), @overall_end, 121);
+        PRINT 'TOTAL DURATION (ms): ' + CAST(@total_ms AS varchar(32));
+        PRINT 'TOTAL DURATION (hh:mm:ss.mmm): ' + CONVERT(varchar(12), @total_time, 114);
+
+    END TRY
+    BEGIN CATCH
+        -- Requested comment as PRINT (kept verbatim):
+        PRINT 'the error in loading the bronz lyre';
+
+        -- Helpful diagnostics for logs:
+        PRINT '----------------------------------------------';
+        PRINT 'ErrorNumber: ' + CAST(ERROR_NUMBER()   AS varchar(10))
+            + ' | Severity: ' + CAST(ERROR_SEVERITY() AS varchar(10))
+            + ' | State: '    + CAST(ERROR_STATE()    AS varchar(10));
+        PRINT 'Procedure: ' + ISNULL(ERROR_PROCEDURE(), '(ad-hoc)')
+            + ' | Line: ' + CAST(ERROR_LINE() AS varchar(10));
+        PRINT 'Message: ' + ERROR_MESSAGE();
+        PRINT '----------------------------------------------';
+
+        -- Re-throw to propagate failure to the caller (job/orchestrator)
+        THROW;
+    END CATCH
+END
+/* ===================== End of Bronze.Load_Bronze ===================== */
