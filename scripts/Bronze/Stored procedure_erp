@@ -1,0 +1,103 @@
+/* ============================================================
+   Procedure: bronze.load_erp_bronze
+   Purpose: Load ERP CSV files into Bronze layer
+   Features:
+   - Print progress separators
+   - TRY / CATCH error handling
+   - Execution duration logging
+============================================================ */
+
+IF OBJECT_ID('bronze.load_erp_bronze', 'P') IS NOT NULL
+    DROP PROCEDURE bronze.load_erp_bronze;
+GO
+
+CREATE PROCEDURE bronze.load_erp_bronze
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @start_time DATETIME = GETDATE();
+    PRINT '=========================================';
+    PRINT 'Starting ERP Bronze Load...';
+    PRINT 'Start Time: ' + CONVERT(VARCHAR, @start_time, 120);
+    PRINT '=========================================';
+
+    BEGIN TRY
+
+        /* ----------------------------
+           Load ERP Customer Data
+        ---------------------------- */
+        PRINT 'Loading: bronze.CUST_AZ12';
+        TRUNCATE TABLE bronze.CUST_AZ12;
+
+        BULK INSERT bronze.CUST_AZ12
+        FROM 'C:\Users\AL-ed\Desktop\project1\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\CUST_AZ12.csv'
+        WITH (
+            FIRSTROW = 2,
+            FIELDTERMINATOR = ',',
+            ROWTERMINATOR = '\n',
+            CODEPAGE = '65001',
+            TABLOCK
+        );
+        PRINT '✔ CUST_AZ12 loaded';
+
+
+        /* ----------------------------
+           Load ERP Location Data
+        ---------------------------- */
+        PRINT 'Loading: bronze.LOC_A101';
+        TRUNCATE TABLE bronze.LOC_A101;
+
+        BULK INSERT bronze.LOC_A101
+        FROM 'C:\Users\AL-ed\Desktop\project1\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\LOC_A101.csv'
+        WITH (
+            FIRSTROW = 2,
+            FIELDTERMINATOR = ',',
+            ROWTERMINATOR = '\n',
+            CODEPAGE = '65001',
+            TABLOCK
+        );
+        PRINT '✔ LOC_A101 loaded';
+
+
+        /* ----------------------------
+           Load ERP Product Categories
+        ---------------------------- */
+        PRINT 'Loading: bronze.PX_CAT_G1V2';
+        TRUNCATE TABLE bronze.PX_CAT_G1V2;
+
+        BULK INSERT bronze.PX_CAT_G1V2
+        FROM 'C:\Users\AL-ed\Desktop\project1\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_erp\PX_CAT_G1V2.csv'
+        WITH (
+            FIRSTROW = 2,
+            FIELDTERMINATOR = ',',
+            ROWTERMINATOR = '\n',
+            CODEPAGE = '65001',
+            TABLOCK
+        );
+        PRINT '✔ PX_CAT_G1V2 loaded';
+
+
+        /* =============================
+           Duration Logging
+        ============================== */
+        DECLARE @end_time DATETIME = GETDATE();
+        DECLARE @duration INT = DATEDIFF(SECOND, @start_time, @end_time);
+
+        PRINT '=========================================';
+        PRINT 'ERP Bronze Load Completed Successfully';
+        PRINT 'End Time: ' + CONVERT(VARCHAR, @end_time, 120);
+        PRINT 'Duration (seconds): ' + CAST(@duration AS VARCHAR);
+        PRINT '=========================================';
+
+    END TRY
+
+    BEGIN CATCH
+        PRINT '=========================================';
+        PRINT '❌ ERROR DURING ERP LOAD';
+        PRINT ERROR_MESSAGE();
+        PRINT '=========================================';
+        THROW;
+    END CATCH
+END;
+GO
