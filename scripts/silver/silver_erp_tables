@@ -1,0 +1,67 @@
+/* ============================================================
+   ADDITIONAL SILVER TABLES (MULTI-SOURCE INTEGRATION)
+   Cleaned and traceable versions of legacy sources
+============================================================ */
+
+
+/* ============================================================
+   TABLE: CUST_AZ12 (Silver)
+============================================================ */
+IF OBJECT_ID('silver.CUST_AZ12', 'U') IS NOT NULL
+    DROP TABLE silver.CUST_AZ12;
+GO
+
+CREATE TABLE silver.CUST_AZ12 (
+    CID VARCHAR(50),
+    BDATE DATE,
+    GEN NVARCHAR(50),
+    dwh_create_date DATETIME2 DEFAULT GETDATE()     -- Source tracking
+);
+GO
+
+
+
+/* ============================================================
+   TABLE: LOC_A101 (Silver)
+============================================================ */
+IF OBJECT_ID('silver.LOC_A101', 'U') IS NOT NULL
+    DROP TABLE silver.LOC_A101;
+GO
+
+CREATE TABLE silver.LOC_A101 (
+    CID NVARCHAR(50),
+    CNTRY NVARCHAR(50),
+    dwh_create_date DATETIME2 DEFAULT GETDATE()     -- Source tracking
+);
+GO
+
+
+
+/* ============================================================
+   TABLE: PX_CAT_G1V2 (Silver)
+============================================================ */
+IF OBJECT_ID('silver.PX_CAT_G1V2', 'U') IS NOT NULL
+    DROP TABLE silver.PX_CAT_G1V2;
+GO
+
+CREATE TABLE silver.PX_CAT_G1V2 (
+    ID NVARCHAR(50),
+    CAT NVARCHAR(50),
+    SUBCAT NVARCHAR(50),
+    MAINTENANCE NVARCHAR(50),
+    dwh_create_date DATETIME2 DEFAULT GETDATE()     -- Source tracking
+);
+GO
+
+
+
+/* ============================================================
+   SILVER DESIGN NOTES
+============================================================ */
+-- ✔ Cleaned integration layer
+-- ✔ Adds data lineage tracking
+-- ✔ Ready for transformations and joins
+-- ✔ Next Step:
+--      - Merge CRM + ERP sources
+--      - Standardize keys
+--      - Build conformed dimensions
