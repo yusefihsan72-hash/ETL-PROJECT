@@ -1,0 +1,103 @@
+/* ============================================================
+   Procedure: bronze.load_crm_bronze
+   Purpose: Load CRM CSV files into Bronze layer
+   Features:
+   - Print progress separators
+   - TRY / CATCH error handling
+   - Execution duration logging
+============================================================ */
+
+IF OBJECT_ID('bronze.load_crm_bronze', 'P') IS NOT NULL
+    DROP PROCEDURE bronze.load_crm_bronze;
+GO
+
+CREATE PROCEDURE bronze.load_crm_bronze
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @start_time DATETIME = GETDATE();
+    PRINT '=========================================';
+    PRINT 'Starting CRM Bronze Load...';
+    PRINT 'Start Time: ' + CONVERT(VARCHAR, @start_time, 120);
+    PRINT '=========================================';
+
+    BEGIN TRY
+
+        /* ----------------------------
+           Load Customer Data
+        ---------------------------- */
+        PRINT 'Loading: bronze.cust_info';
+        TRUNCATE TABLE bronze.cust_info;
+
+        BULK INSERT bronze.cust_info
+        FROM 'C:\Users\AL-ed\Desktop\project1\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\cust_info.csv'
+        WITH (
+            FIRSTROW = 2,
+            FIELDTERMINATOR = ',',
+            ROWTERMINATOR = '\n',
+            CODEPAGE = '65001',
+            TABLOCK
+        );
+        PRINT '✔ cust_info loaded';
+
+
+        /* ----------------------------
+           Load Product Data
+        ---------------------------- */
+        PRINT 'Loading: bronze.prd_info';
+        TRUNCATE TABLE bronze.prd_info;
+
+        BULK INSERT bronze.prd_info
+        FROM 'C:\Users\AL-ed\Desktop\project1\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\prd_info.csv'
+        WITH (
+            FIRSTROW = 2,
+            FIELDTERMINATOR = ',',
+            ROWTERMINATOR = '\n',
+            CODEPAGE = '65001',
+            TABLOCK
+        );
+        PRINT '✔ prd_info loaded';
+
+
+        /* ----------------------------
+           Load Sales Transactions
+        ---------------------------- */
+        PRINT 'Loading: bronze.sales_details';
+        TRUNCATE TABLE bronze.sales_details;
+
+        BULK INSERT bronze.sales_details
+        FROM 'C:\Users\AL-ed\Desktop\project1\sql-data-warehouse-project\sql-data-warehouse-project\datasets\source_crm\sales_details.csv'
+        WITH (
+            FIRSTROW = 2,
+            FIELDTERMINATOR = ',',
+            ROWTERMINATOR = '\n',
+            CODEPAGE = '65001',
+            TABLOCK
+        );
+        PRINT '✔ sales_details loaded';
+
+
+        /* =============================
+           Duration Logging
+        ============================== */
+        DECLARE @end_time DATETIME = GETDATE();
+        DECLARE @duration INT = DATEDIFF(SECOND, @start_time, @end_time);
+
+        PRINT '=========================================';
+        PRINT 'CRM Bronze Load Completed Successfully';
+        PRINT 'End Time: ' + CONVERT(VARCHAR, @end_time, 120);
+        PRINT 'Duration (seconds): ' + CAST(@duration AS VARCHAR);
+        PRINT '=========================================';
+
+    END TRY
+
+    BEGIN CATCH
+        PRINT '=========================================';
+        PRINT '❌ ERROR DURING CRM LOAD';
+        PRINT ERROR_MESSAGE();
+        PRINT '=========================================';
+        THROW;
+    END CATCH
+END;
+GO
