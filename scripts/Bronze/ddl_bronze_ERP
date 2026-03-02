@@ -1,0 +1,78 @@
+/* ============================================================
+   ADDITIONAL BRONZE TABLES (MULTI-SOURCE INGESTION)
+   These represent raw feeds from heterogeneous systems
+   Naming reflects original source system identifiers
+============================================================ */
+
+
+/* ============================================================
+   TABLE: CUST_AZ12
+   Source: External ERP / Legacy Customer System
+   Characteristics:
+   - Non-standard naming (raw ingestion preserved)
+   - Will be standardized in Silver layer
+============================================================ */
+IF OBJECT_ID('bronze.CUST_AZ12', 'U') IS NOT NULL
+    DROP TABLE bronze.CUST_AZ12;
+GO
+
+CREATE TABLE bronze.CUST_AZ12 (
+    CID VARCHAR(50),        -- Customer ID from source AZ12
+    BDATE DATE,             -- Birth date
+    GEN NVARCHAR(50)        -- Gender (raw format, may vary)
+);
+GO
+
+
+
+/* ============================================================
+   TABLE: LOC_A101
+   Source: Geography / Address Mapping System
+   Notes:
+   - Provides country lookup by CID
+   - Will be joined in Silver layer
+============================================================ */
+IF OBJECT_ID('bronze.LOC_A101', 'U') IS NOT NULL
+    DROP TABLE bronze.LOC_A101;
+GO
+
+CREATE TABLE bronze.LOC_A101 (
+    CID NVARCHAR(50),       -- Customer identifier
+    CNTRY NVARCHAR(50)      -- Country name (raw text)
+);
+GO
+
+
+
+/* ============================================================
+   TABLE: PX_CAT_G1V2
+   Source: Product Classification System
+   Notes:
+   - Used to enrich product dimension
+   - Boolean stored as BIT
+============================================================ */
+IF OBJECT_ID('bronze.PX_CAT_G1V2', 'U') IS NOT NULL
+    DROP TABLE bronze.PX_CAT_G1V2;
+GO
+
+CREATE TABLE bronze.PX_CAT_G1V2 (
+    ID NVARCHAR(50),        -- Product ID reference
+    CAT NVARCHAR(50),       -- Category
+    SUBCAT NVARCHAR(50),    -- Subcategory
+    MAINTENANCE NVARCHAR(50)        -- Maintenance flag (1 = requires maintenance)
+);
+GO
+
+
+
+/* ============================================================
+   BRONZE DESIGN NOTES
+============================================================ */
+-- ✔ Raw ingestion tables from multiple source systems
+-- ✔ Naming inconsistencies intentionally preserved
+-- ✔ No constraints (Bronze principle)
+-- ✔ Will be unified in SILVER layer:
+--      - Standard naming
+--      - Data type alignment
+--      - Deduplication
+--      - Source reconciliation 
