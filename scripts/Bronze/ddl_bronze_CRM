@@ -1,0 +1,84 @@
+/* ============================================================
+   TABLE 1: Customer Information (Raw Layer)
+   Source: CRM / Customer Master System
+   Notes:
+   - No constraints intentionally (raw zone)
+   - Nullable values allowed
+============================================================ */
+IF OBJECT_ID('bronze.cust_info', 'U') IS NOT NULL
+    DROP TABLE bronze.cust_info;
+GO
+
+CREATE TABLE bronze.cust_info (
+    cst_id INT,                       -- Customer surrogate/business ID
+    cst_key NVARCHAR(50),            -- Source system key
+    cst_first_name NVARCHAR(50),     -- Raw first name (uncleansed)
+    cst_last_name NVARCHAR(50),      -- Raw last name
+    cst_marital_status NVARCHAR(50), -- Raw marital status text
+    cst_gndr NVARCHAR(50),           -- Gender as provided by source
+    cst_create_date DATE             -- Customer creation date in source
+);
+GO
+
+
+
+/* ============================================================
+   TABLE 2: Product Information (Raw Layer)
+   Source: Product Catalog / ERP
+   Notes:
+   - Dates represent product lifecycle
+   - End date can be NULL (still active)
+============================================================ */
+IF OBJECT_ID('bronze.prd_info', 'U') IS NOT NULL
+    DROP TABLE bronze.prd_info;
+GO
+
+CREATE TABLE bronze.prd_info (
+    prd_id INT,                      -- Product ID (raw identifier)
+    prd_key NVARCHAR(50),           -- Business key from source
+    prd_nm NVARCHAR(50),            -- Product name (raw text)
+    prd_cost INT,                   -- Base cost (unvalidated)
+    prd_line NVARCHAR(50),          -- Product category/line
+    prd_start_dt DATE,              -- Product activation date
+    prd_end_dt DATE                 -- Product retirement date (nullable)
+);
+GO
+
+
+
+/* ============================================================
+   TABLE 3: Sales Transactions (Raw Layer)
+   Source: Sales / Order Management System
+   Notes:
+   - Transaction-level grain
+   - No foreign keys in Bronze
+   - Will be validated in Silver layer
+============================================================ */
+IF OBJECT_ID('bronze.sales_details', 'U') IS NOT NULL
+    DROP TABLE bronze.sales_details;
+GO
+
+CREATE TABLE bronze.sales_details (
+    sls_ord_num NVARCHAR(50),       -- Order number (source format)
+    sls_prd_key NVARCHAR(50),       -- Product key reference
+    sls_cst_id INT,                 -- Customer ID reference
+    sls_order_dt NVARCHAR(50),              -- Order placement date
+    sls_ship_dt NVARCHAR(50),               -- Shipping date
+    sls_due_dt NVARCHAR(50),                -- Due/expected delivery date
+    sls_sales INT,                  -- Total sales amount (raw)
+    sls_quantity INT,               -- Units sold
+    sls_price INT                   -- Unit price captured at sale
+);
+GO
+
+
+/* ============================================================
+   BRONZE LAYER SUMMARY
+============================================================ */
+-- ✔ Raw ingestion layer
+-- ✔ No constraints, keys, or transformations
+-- ✔ Designed for:
+--      - Auditing
+--      - Replay pipelines
+--      - Data lineage
+-- ✔ Next Step: Build SILVER layer (cleaned + standardized)
