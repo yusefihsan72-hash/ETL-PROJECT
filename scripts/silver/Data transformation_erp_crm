@@ -1,0 +1,372 @@
+/* ============================================================
+   INSERT CLEANED CUSTOMER DATA INTO SILVER LAYER
+   Source  : bronze.cust_info
+   Target  : silver.cust_info
+   Purpose : 
+      - Remove duplicate customers
+      - Standardize text values
+      - Clean gender and marital status
+      - Trim extra spaces
+============================================================ */
+
+INSERT INTO silver.cust_info
+(
+    cst_id,
+    cst_key,
+    cst_first_name,
+    cst_last_name,
+    cst_marital_status,
+    cst_gndr,
+    cst_create_date
+)
+
+SELECT
+    cst_id,
+
+    /* Customer business key */
+    cst_key,
+
+    /* Remove leading and trailing spaces from first name */
+    TRIM(cst_first_name) AS cst_first_name,
+
+    /* Remove leading and trailing spaces from last name */
+    TRIM(cst_last_name) AS cst_last_name,
+
+    /* Standardize marital status values */
+    CASE 
+        WHEN TRIM(cst_marital_status) = 'S' THEN 'single'
+        WHEN TRIM(cst_marital_status) = 'M' THEN 'married'
+        ELSE 'n/a'
+    END AS cst_marital_status,
+
+    /* Standardize gender values */
+    CASE 
+        WHEN TRIM(cst_gndr) = 'M' THEN 'male'
+        WHEN TRIM(cst_gndr) = 'F' THEN 'female'
+        ELSE 'n/a'
+    END AS cst_gndr,
+
+    /* Customer record creation date */
+    cst_create_date
+
+FROM
+(
+    /* ---------------------------------------------------------
+       Deduplication Logic
+       Keep only the most recent record for each customer
+       based on creation date
+    --------------------------------------------------------- */
+    SELECT 
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY cst_id
+            ORDER BY cst_create_date DESC
+        ) AS FLAG_LAST
+
+    FROM bronze.cust_info
+
+) t
+
+/* ---------------------------------------------------------
+   Keep only:
+   - Latest record per customer
+   - Valid customer IDs
+--------------------------------------------------------- */
+WHERE FLAG_LAST = 1
+AND cst_id IS NOT NULL;
+
+
+
+
+
+
+/* ============================================================
+   INSERT CLEANED PRODUCT DATA INTO SILVER LAYER
+   Source  : bronze.prd_info
+   Target  : silver.prd_info
+   Purpose :
+      - Extract category ID from product key
+      - Clean product key format
+      - Replace null cost with 0
+      - Standardize product line values
+      - Derive product end date using LEAD
+============================================================ */
+
+INSERT INTO silver.prd_info
+(
+    prd_id,
+    cat_id,
+    prd_key,
+    prd_nm,
+    prd_cost,
+    prd_line,
+    prd_start_dt,
+    prd_end_dt
+)
+
+SELECT
+    /* Product ID */
+    prd_id,
+
+    /* Extract category ID from first 5 characters and replace - with _ */
+    REPLACE(SUBSTRING(prd_key, 1, 5), '-', '_') AS cat_id,
+
+    /* Extract actual product key starting from position 7 */
+    SUBSTRING(prd_key, 7, LEN(prd_key)) AS prd_key,
+
+    /* Product name */
+    prd_nm,
+
+    /* Replace null product cost with 0 */
+    ISNULL(prd_cost, 0) AS prd_cost,
+
+    /* Standardize product line values */
+    CASE UPPER(TRIM(prd_line))
+        WHEN 'M' THEN 'mountain'
+        WHEN 'R' THEN 'road'
+        WHEN 'S' THEN 'other sales'
+        WHEN 'T' THEN 'touring'
+        ELSE 'n/a'
+    END AS prd_line,
+
+    /* Product start date */
+    prd_start_dt,
+
+    /* Product end date = next start date for same product key */
+    LEAD(prd_start_dt) OVER (
+        PARTITION BY prd_key
+        ORDER BY prd_start_dt
+    ) AS prd_end_dt
+
+FROM bronze.prd_info;
+
+
+
+
+
+* ============================================================
+   INSERT CLEANED SALES DATA INTO SILVER LAYER
+   Source  : bronze.sales_details
+   Target  : silver.sales_details
+   Purpose :
+      - Convert integer-like date fields into proper DATE
+      - Handle invalid order dates
+      - Recalculate sales when source value is invalid
+      - Fix invalid or missing prices
+============================================================ */
+
+INSERT INTO silver.sales_details
+(
+    sls_ord_num,
+    sls_prd_key,
+    sls_cst_id,
+    sls_order_dt,
+    sls_ship_dt,
+    sls_due_dt,
+    sls_sales,
+    sls_quantity,
+    sls_price
+)
+
+SELECT
+    /* Sales order number */
+    sls_ord_num,
+
+    /* Product key */
+    sls_prd_key,
+
+    /* Customer ID */
+    sls_cst_id,
+
+    /* --------------------------------------------------------
+       Convert order date to DATE
+       Rules:
+       - If date is not 8 digits or equals 0, return NULL
+       - Otherwise convert YYYYMMDD into DATE
+    -------------------------------------------------------- */
+    CASE 
+        WHEN LEN(CAST(sls_order_dt AS VARCHAR)) != 8 OR sls_order_dt = 0 THEN NULL
+        ELSE CAST(CAST(sls_order_dt AS VARCHAR(8)) AS DATE)
+    END AS sls_order_dt,
+
+    /* --------------------------------------------------------
+       Convert ship date to DATE
+       Add similar validation if needed
+    -------------------------------------------------------- */
+    CASE 
+        WHEN LEN(CAST(sls_ship_dt AS VARCHAR)) != 8 OR sls_ship_dt = 0 THEN NULL
+        ELSE CAST(CAST(sls_ship_dt AS VARCHAR(8)) AS DATE)
+    END AS sls_ship_dt,
+
+    /* --------------------------------------------------------
+       Convert due date to DATE
+       Add similar validation if needed
+    -------------------------------------------------------- */
+    CASE 
+        WHEN LEN(CAST(sls_due_dt AS VARCHAR)) != 8 OR sls_due_dt = 0 THEN NULL
+        ELSE CAST(CAST(sls_due_dt AS VARCHAR(8)) AS DATE)
+    END AS sls_due_dt,
+
+    /* --------------------------------------------------------
+       Fix sales amount:
+       - If sales is zero/negative
+       - Or sales does not match quantity × price
+       Then recalculate it
+    -------------------------------------------------------- */
+    CASE 
+        WHEN sls_sales <= 0 
+             OR sls_sales != sls_quantity * ABS(sls_price)
+        THEN sls_quantity * ABS(sls_price)
+        ELSE sls_sales
+    END AS sls_sales,
+
+    /* Quantity sold */
+    sls_quantity,
+
+    /* --------------------------------------------------------
+       Fix unit price:
+       - If price is null or <= 0, derive it from sales/quantity
+       - NULLIF prevents division by zero
+    -------------------------------------------------------- */
+    CASE 
+        WHEN sls_price <= 0 OR sls_price IS NULL
+        THEN sls_sales / NULLIF(sls_quantity, 0)
+        ELSE sls_price
+    END AS sls_price
+
+FROM bronze.sales_details;
+
+
+
+
+
+
+/* ============================================================
+   INSERT CLEANED CUSTOMER DATA INTO SILVER LAYER
+   Source  : bronze.CUST_AZ12
+   Target  : silver.cust_az12
+   Purpose :
+      - Clean customer ID format
+      - Validate birth dates
+      - Standardize gender values
+============================================================ */
+
+INSERT INTO silver.CUST_AZ12
+(
+    CID,
+    BDATE,
+    GEN
+)
+
+SELECT
+
+    /* --------------------------------------------------------
+       Clean Customer ID
+       If CID starts with 'NAS', remove the prefix
+       Example:
+       NAS12345 → 12345
+    -------------------------------------------------------- */
+    CASE 
+        WHEN CID LIKE 'NAS%' 
+        THEN SUBSTRING(CID, 4, LEN(CID))
+        ELSE CID
+    END AS CID,
+
+    /* --------------------------------------------------------
+       Validate Birth Date
+       If birth date is in the future → set to NULL
+    -------------------------------------------------------- */
+    CASE  
+        WHEN BDATE > GETDATE() 
+        THEN NULL
+        ELSE BDATE
+    END AS BDATE,
+
+    /* --------------------------------------------------------
+       Standardize Gender Values
+       Convert different formats to consistent values
+    -------------------------------------------------------- */
+    CASE 
+        WHEN TRIM(GEN) = 'F' OR TRIM(GEN) = 'Female' THEN 'female'
+        WHEN TRIM(GEN) = 'M' OR TRIM(GEN) = 'Male'   THEN 'male'
+        ELSE 'n/a'
+    END AS GEN
+
+FROM bronze.CUST_AZ12;
+
+
+
+
+/* ============================================================
+   INSERT CLEANED LOCATION DATA INTO SILVER LAYER
+   Source  : bronze.LOC_A101
+   Target  : silver.LOC_A101
+   Purpose :
+      - Clean Customer ID format
+      - Standardize country names
+============================================================ */
+
+INSERT INTO silver.LOC_A101
+(
+    CID,
+    CNTRY
+)
+
+SELECT
+
+    /* --------------------------------------------------------
+       Remove '-' characters from Customer ID
+       Example:
+       123-45 → 12345
+    -------------------------------------------------------- */
+    REPLACE(CID , '-' , '') AS CID,
+
+    /* --------------------------------------------------------
+       Standardize country values
+       Convert codes into full country names
+    -------------------------------------------------------- */
+    CASE 
+        WHEN TRIM(CNTRY) = 'US' OR TRIM(CNTRY) = 'USA' THEN 'United States'
+        WHEN TRIM(CNTRY) = 'DE' THEN 'Germany'
+        WHEN TRIM(CNTRY) = '' OR CNTRY IS NULL THEN 'n/a'
+        ELSE TRIM(CNTRY)
+    END AS CNTRY
+
+FROM bronze.LOC_A101;
+
+
+
+
+
+/* ============================================================
+   INSERT PRODUCT CATEGORY DATA INTO SILVER LAYER
+   Source  : bronze.PX_CAT_G1V2
+   Target  : silver.PX_CAT_G1V2
+   Purpose :
+      - Move category data from Bronze to Silver
+      - Keep the same structure (no transformation needed)
+============================================================ */
+
+INSERT INTO silver.PX_CAT_G1V2
+(
+    ID,
+    CAT,
+    SUBCAT,
+    MAINTENANCE
+)
+
+SELECT
+
+    /* Category ID */
+    ID,
+
+    /* Main category name */
+    CAT,
+
+    /* Subcategory name */
+    SUBCAT,
+
+    /* Maintenance indicator */
+    MAINTENANCE
+
+FROM bronze.PX_CAT_G1V2;
